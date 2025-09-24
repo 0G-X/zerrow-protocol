@@ -102,13 +102,20 @@ interface iLendingManager{
     function setInterfaceApproval(address iface, bool approved) external;
     function interfaceApproval(address user, address iface) external view returns (bool);
 
+    // FlashLoan
+    function executeFlashLoan(address useTokenAddr,
+                              address borrowTokenAddr,
+                              uint    borrowAmount,
+                              address flashLoanUserContractAddr,
+                              address user)  external;
+
     // token Liquidate
     function tokenLiquidate(address user,
                             address liquidateToken,
                             uint    liquidateAmount, 
                             address depositToken) external returns(uint usedAmount) ;
-    function tokenLiquidateEstimate(address user,
-                            address liquidateToken,
-                            address depositToken) external view returns(uint[2] memory maxAmounts);
+    // function tokenLiquidateEstimate(address user,
+    //                         address liquidateToken,
+    //                         address depositToken) external view returns(uint[2] memory maxAmounts);
 
 }

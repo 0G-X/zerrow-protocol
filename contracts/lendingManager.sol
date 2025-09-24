@@ -12,6 +12,7 @@ import "./interfaces/iCoinFactory.sol";
 import "./interfaces/iDepositOrLoanCoin.sol";
 import "./interfaces/iLendingCoreAlgorithm.sol";
 import "./interfaces/iLendingVaults.sol";
+import "./interfaces/iUserFlashLoan.sol";
 
 contract lendingManager is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -29,12 +30,13 @@ contract lendingManager is ReentrancyGuard {
 
     address public setter;
     address newsetter;
-    address public rebalancer;
+    // address public rebalancer;
 
     uint    public normalFloorOfHealthFactor;
     uint    public homogeneousFloorOfHealthFactor;
 
     address public badDebtCollectionAddress;
+    address public flashLoanFeesAddress;
 
     //  Assets Init:          USDT  USDC  BTC   ETH   0g
     //  MaximumLTV:            95%   95%  80%   75%  50%
@@ -125,13 +127,16 @@ contract lendingManager is ReentrancyGuard {
 
     constructor() {
         setter = msg.sender;
-        rebalancer = msg.sender;
+        // rebalancer = msg.sender;
         normalFloorOfHealthFactor = 1.2 ether;
         homogeneousFloorOfHealthFactor = 1.03 ether;
     }
 
     function setBadDebtCollectionAddress(address _badDebtCollectionAddress) external onlySetter{
         badDebtCollectionAddress = _badDebtCollectionAddress;
+    }
+    function setFlashLoanFeesAddress(address _flashLoanFeesAddress) external onlySetter{
+        flashLoanFeesAddress = _flashLoanFeesAddress;
     }
 
     function transferSetter(address _set) external onlySetter{
@@ -158,7 +163,7 @@ contract lendingManager is ReentrancyGuard {
     }
 
     function xInterfacesetting(address _xInterface, bool _ToF)external onlySetter{
-        require(isContract(_xInterface),"Lending Manager: Interface MUST be a contract.");
+        // require(isContract(_xInterface),"Lending Manager: Interface MUST be a contract.");
         uint lengthTemp = interfaceArray.length;
         if(_ToF == false){
             for(uint i = 0; i != lengthTemp; i++){
@@ -256,6 +261,7 @@ contract lendingManager is ReentrancyGuard {
                 && _bestDepositInterestRate > 0
                 && _bestDepositInterestRate < UPPER_SYSTEM_LIMIT
                 && _reserveFactor > 0,"Lending Manager: Exceed UPPER_SYSTEM_LIMIT");
+         _beforeUpdate;
         licensedAssets[_asset].maximumLTV = _maxLTV;
         licensedAssets[_asset].liquidationPenalty = _liqPenalty;
         licensedAssets[_asset].maxLendingAmountInRIM = _maxLendingAmountInRIM;
@@ -264,6 +270,7 @@ contract lendingManager is ReentrancyGuard {
         licensedAssets[_asset].homogeneousModeLTV = _homogeneousModeLTV;
         licensedAssets[_asset].bestDepositInterestRate = _bestDepositInterestRate;
         licensedAssets[_asset].reserveFactor = _reserveFactor;
+        _assetsValueUpdate;
         emit LicensedAssetsSetup(_asset, 
                                  _maxLTV, 
                                  _liqPenalty,
@@ -287,12 +294,13 @@ contract lendingManager is ReentrancyGuard {
         emit UserModeSetting(user, _mode, _userRIMAssetsAddress);
     }
 
-    function isContract(address account) internal view returns (bool) {
-        bytes32 codehash;
-        bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
-        assembly { codehash := extcodehash(account) }
-        return (codehash != 0x0 && codehash != accountHash);
-    }
+    // function isContract(address account) internal view returns (bool) {
+    //     bytes32 codehash;
+    //     bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+    //     assembly { codehash := extcodehash(account) }
+    //     return (codehash != 0x0 && codehash != accountHash);
+    // }
+
     //     licensedAssets[_asset].assetAddr = _asset;
     //     licensedAssets[_asset].maximumLTV = _maxLTV;
     //     licensedAssets[_asset].liquidationPenalty = _liqPenalty;
@@ -333,12 +341,18 @@ contract lendingManager is ReentrancyGuard {
                 assetInfos[token].latestLendingInterest);
     }
 
-    function assetsDepositAndLendAddrs(address token) external view returns(address[2] memory addrs){
+    function assetsDepositAndLendAddrs(address token) public view returns(address[2] memory addrs){
         return assetsDepositAndLend[token];
     }
 
     function licensedAssetAmount() public view returns(uint assetLength){
         assetLength = assetsSerialNumber.length;
+    }
+    function VaultTokensAmount(address tokenAddr) public view returns(uint maxAmount){
+        address[2] memory pair = assetsDepositAndLendAddrs(tokenAddr);
+        uint amountD18 = iDepositOrLoanCoin(pair[0]).totalSupply();
+        uint amountL18 = iDepositOrLoanCoin(pair[1]).totalSupply();
+        return (amountD18 - amountL18);
     }
 
     function _userTotalLendingValue(address _user) internal view returns(uint values){
@@ -472,6 +486,7 @@ contract lendingManager is ReentrancyGuard {
 
         require(amount > 0,"Lending Manager: Cant Pledge 0 amount");
         require(licensedAssets[tokenAddr].assetAddr == tokenAddr,"Lending Manager: Token not licensed");
+        require(VaultTokensAmount(tokenAddr) >= amountNormalize,"Lending Manager: Vault Tokens amount NOT enough");
         // There is no need to check the mode
 
         iLendingVaults(lendingVault).vaultsERC20Approve(tokenAddr, amount);
@@ -497,6 +512,7 @@ contract lendingManager is ReentrancyGuard {
 
         require(amount > 0,"Lending Manager: Cant Pledge 0 amount");
         require(licensedAssets[tokenAddr].assetAddr == tokenAddr,"Lending Manager: Token not licensed");
+        require(VaultTokensAmount(tokenAddr) >= amountNormalize,"Lending Manager: Vault Tokens amount NOT enough");
 
         if(userMode[user] == 1){
             require(tokenAddr == riskIsolationModeAcceptAssets,"Lending Manager: Wrong Token in Risk Isolation Mode");
@@ -552,6 +568,39 @@ contract lendingManager is ReentrancyGuard {
         emit RepayLoan(tokenAddr, amount, user);
     }
     //------------------------------------------------------------------------------
+    function executeFlashLoan(address useTokenAddr,
+                              address borrowTokenAddr,
+                              uint    borrowAmount,
+                              address flashLoanUserContractAddr,
+                              address user) public onlyInterface(user) nonReentrant {
+        uint borrowAmountNormalize = borrowAmount * 1 ether / (10**iDecimals(borrowTokenAddr).decimals());
+        uint userMaxPaid = iDepositOrLoanCoin(assetsDepositAndLend[useTokenAddr][0]).balanceOf(user) 
+                         * iSlcOracle(oracleAddr).getPrice(useTokenAddr) ; // usd value
+        uint userNeedPaid = borrowAmountNormalize * iSlcOracle(oracleAddr).getPrice(borrowTokenAddr) / 100;// usd value  fees: 1/100
+        require(userMaxPaid > userNeedPaid ,"Lending Manager: Insufficient funds");
+
+        require(borrowAmount > 0,"Lending Manager: Cant Pledge 0 amount");
+        require(licensedAssets[useTokenAddr].assetAddr == useTokenAddr,"Lending Manager: Token not licensed");
+        userNeedPaid = userNeedPaid / iSlcOracle(oracleAddr).getPrice(useTokenAddr);
+        require(VaultTokensAmount(useTokenAddr) > userNeedPaid,"Lending Manager: Vault Tokens amount NOT enough");
+        IERC20(useTokenAddr).safeTransferFrom(lendingVault, flashLoanFeesAddress, userNeedPaid);
+        iDepositOrLoanCoin(assetsDepositAndLend[useTokenAddr][0]).burnCoin(user, userNeedPaid);
+
+        _beforeUpdate(useTokenAddr);
+        IERC20(borrowTokenAddr).safeTransferFrom(lendingVault, user, borrowAmount);
+        iUserFlashLoan(flashLoanUserContractAddr).executeOperation(borrowTokenAddr, borrowAmount, '');
+        IERC20(borrowTokenAddr).safeTransferFrom(user, lendingVault, borrowAmount);
+        _assetsValueUpdate(useTokenAddr);
+
+        uint factor;
+        (factor) = viewUsersHealthFactor(user);
+        if(userMode[user] > 1){
+            require( factor >= homogeneousFloorOfHealthFactor,"Your Health Factor <= homogeneous Floor Of Health Factor, Cant redeem assets");
+        }else{
+            require( factor >= normalFloorOfHealthFactor,"Your Health Factor <= normal Floor Of Health Factor, Cant redeem assets");
+        }
+    }
+    //------------------------------------------------------------------------------
     function badDebtDeduction(address user) public nonReentrant {
         require(_userTotalDepositValue(user) <= _userTotalLendingValue(user)*102/100,"Lending Manager: should be bad debt.");
         uint len = assetsSerialNumber.length;
@@ -568,17 +617,17 @@ contract lendingManager is ReentrancyGuard {
                 iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).mintCoin(badDebtCollectionAddress, depositBalances[i]);
             }
             if (lendingBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).mintCoin(badDebtCollectionAddress, lendingBalances[i]);
+                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).mintCoin(badDebtCollectionAddress, lendingBalances[i]);
             }
 
         }
         // Process all burns after mints
-        for (uint i = 0; i < len; i++) {
+        for (uint i = 0; i != len; i++) {
             if (depositBalances[i] > 0) {
                 iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).burnCoin(user, depositBalances[i]);
             }
             if (lendingBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).burnCoin(user, lendingBalances[i]);
+                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).burnCoin(user, lendingBalances[i]);
             }
         }
 
@@ -622,35 +671,35 @@ contract lendingManager is ReentrancyGuard {
         emit RepayLoan(depositToken, usedAmount, user);
     }
     
-    function tokenLiquidateEstimate(address user,
-                            address liquidateToken,
-                            address depositToken) public view returns(uint[2] memory maxAmounts){
-        if(viewUsersHealthFactor(user) >= 1 ether){
-            uint[2] memory zero;
-            return zero;
-        }
-        uint amountliquidate = iDepositOrLoanCoin(assetsDepositAndLend[liquidateToken][0]).balanceOf(user);
-        uint amountDeposit = iDepositOrLoanCoin(assetsDepositAndLend[depositToken][1]).balanceOf(user);
-        uint liquidateTokenPrice = iSlcOracle(oracleAddr).getPrice(liquidateToken);
-        uint depositTokenPrice = iSlcOracle(oracleAddr).getPrice(depositToken);
+    // function tokenLiquidateEstimate(address user,
+    //                         address liquidateToken,
+    //                         address depositToken) public view returns(uint[2] memory maxAmounts){
+    //     if(viewUsersHealthFactor(user) >= 1 ether){
+    //         uint[2] memory zero;
+    //         return zero;
+    //     }
+    //     uint amountliquidate = iDepositOrLoanCoin(assetsDepositAndLend[liquidateToken][0]).balanceOf(user);
+    //     uint amountDeposit = iDepositOrLoanCoin(assetsDepositAndLend[depositToken][1]).balanceOf(user);
+    //     uint liquidateTokenPrice = iSlcOracle(oracleAddr).getPrice(liquidateToken);
+    //     uint depositTokenPrice = iSlcOracle(oracleAddr).getPrice(depositToken);
 
-        uint liquidateMaxValue = amountliquidate * liquidateTokenPrice / 1 ether;//
-        uint depositMaxValue = amountDeposit * depositTokenPrice / 1 ether
-                      * UPPER_SYSTEM_LIMIT / (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty);//
+    //     uint liquidateMaxValue = amountliquidate * liquidateTokenPrice / 1 ether;//
+    //     uint depositMaxValue = amountDeposit * depositTokenPrice / 1 ether
+    //                   * UPPER_SYSTEM_LIMIT / (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty);//
 
-        if(liquidateMaxValue < depositMaxValue){
-            maxAmounts[0] = amountliquidate;
-            maxAmounts[1] = liquidateMaxValue * (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty) * 1 ether 
-                                            / (UPPER_SYSTEM_LIMIT * depositTokenPrice);
-        }else if(liquidateMaxValue == depositMaxValue){
-            maxAmounts[0] = amountliquidate;
-            maxAmounts[1] = amountDeposit;
-        }else{
-            maxAmounts[0] = depositMaxValue * 1 ether / liquidateTokenPrice;//At this point, this Token deposit of the liquidated user will be fully liquidated
-            maxAmounts[1] = amountDeposit;
+    //     if(liquidateMaxValue < depositMaxValue){
+    //         maxAmounts[0] = amountliquidate;
+    //         maxAmounts[1] = liquidateMaxValue * (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty) * 1 ether 
+    //                                         / (UPPER_SYSTEM_LIMIT * depositTokenPrice);
+    //     }else if(liquidateMaxValue == depositMaxValue){
+    //         maxAmounts[0] = amountliquidate;
+    //         maxAmounts[1] = amountDeposit;
+    //     }else{
+    //         maxAmounts[0] = depositMaxValue * 1 ether / liquidateTokenPrice;//At this point, this Token deposit of the liquidated user will be fully liquidated
+    //         maxAmounts[1] = amountDeposit;
             
-        }
-        maxAmounts[0] = maxAmounts[0] * (10**iDecimals(liquidateToken).decimals()) / 1 ether;
-        maxAmounts[1] = maxAmounts[1] * (10**iDecimals(depositToken).decimals()) / 1 ether;
-    }
+    //     }
+    //     maxAmounts[0] = maxAmounts[0] * (10**iDecimals(liquidateToken).decimals()) / 1 ether;
+    //     maxAmounts[1] = maxAmounts[1] * (10**iDecimals(depositToken).decimals()) / 1 ether;
+    // }
 }
