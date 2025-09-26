@@ -74,7 +74,7 @@ contract zerrowOracle {
         uint amount = address(this).balance;
         address payable receiver = payable(msg.sender);
         (bool success, ) = receiver.call{value:amount}("");
-        require(success,"X SLC Oracle: CFX Transfer Failed");
+        require(success,"Zerrow Oracle: 0g Transfer Failed");
     }
     // ======================== contract base methods =====================
     fallback() external payable {}

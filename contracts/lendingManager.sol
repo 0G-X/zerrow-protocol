@@ -170,6 +170,7 @@ contract lendingManager is ReentrancyGuard {
                 if(interfaceArray[i] == _xInterface){
                     interfaceArray[i] = interfaceArray[lengthTemp -1];
                     interfaceArray.pop();
+                    break;
                 }
             }
         }else if(xInterface[_xInterface] == false){
@@ -294,13 +295,6 @@ contract lendingManager is ReentrancyGuard {
         emit UserModeSetting(user, _mode, _userRIMAssetsAddress);
     }
 
-    // function isContract(address account) internal view returns (bool) {
-    //     bytes32 codehash;
-    //     bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
-    //     assembly { codehash := extcodehash(account) }
-    //     return (codehash != 0x0 && codehash != accountHash);
-    // }
-
     //     licensedAssets[_asset].assetAddr = _asset;
     //     licensedAssets[_asset].maximumLTV = _maxLTV;
     //     licensedAssets[_asset].liquidationPenalty = _liqPenalty;
@@ -362,6 +356,7 @@ contract lendingManager is ReentrancyGuard {
             * iSlcOracle(oracleAddr).getPrice(assetsSerialNumber[i]) / 1 ether;
         }
     }
+
     function _userTotalDepositValue(address _user) internal view returns(uint values){
         //require(assetsSerialNumber.length < 100,"Lending Manager: Too Much assets");
         for(uint i=0;i!=assetsSerialNumber.length;i++){
@@ -517,11 +512,11 @@ contract lendingManager is ReentrancyGuard {
         if(userMode[user] == 1){
             require(tokenAddr == riskIsolationModeAcceptAssets,"Lending Manager: Wrong Token in Risk Isolation Mode");
             uint tempAmount = IERC20(assetsDepositAndLend[riskIsolationModeAcceptAssets][1]).balanceOf(user) + amountNormalize;
-            riskIsolationModeLendingNetAmount[tokenAddr] = riskIsolationModeLendingNetAmount[tokenAddr] 
+            riskIsolationModeLendingNetAmount[userRIMAssetsAddress[user]] = riskIsolationModeLendingNetAmount[userRIMAssetsAddress[user]] 
                                                          - userRIMAssetsLendingNetAmount[user][tokenAddr]
                                                          + tempAmount;
             userRIMAssetsLendingNetAmount[user][tokenAddr] = tempAmount;
-            require(riskIsolationModeLendingNetAmount[tokenAddr] <= licensedAssets[userRIMAssetsAddress[user]].maxLendingAmountInRIM,"Lending Manager: Deposit Amount exceed limits");
+            require(riskIsolationModeLendingNetAmount[userRIMAssetsAddress[user]] <= licensedAssets[userRIMAssetsAddress[user]].maxLendingAmountInRIM,"Lending Manager: The borrow amount exceeds RIM allowed limit");
         }
         if(userMode[user] > 1){
             require((licensedAssets[tokenAddr].lendingModeNum == userMode[user]),"Lending Manager: Wrong Mode, Need in same homogeneous Mode");
@@ -556,7 +551,7 @@ contract lendingManager is ReentrancyGuard {
             require(licensedAssets[userRIMAssetsAddress[user]].maxLendingAmountInRIM > 0,"Lending Manager: Wrong Token in Risk Isolation Mode");
             require((tokenAddr == riskIsolationModeAcceptAssets),"Lending Manager: Wrong Token in Risk Isolation Mode");
             uint tempAmount = IERC20(assetsDepositAndLend[riskIsolationModeAcceptAssets][1]).balanceOf(user) - amountNormalize;
-            riskIsolationModeLendingNetAmount[tokenAddr] = riskIsolationModeLendingNetAmount[tokenAddr] 
+            riskIsolationModeLendingNetAmount[userRIMAssetsAddress[user]] = riskIsolationModeLendingNetAmount[userRIMAssetsAddress[user]] 
                                                          - userRIMAssetsLendingNetAmount[user][tokenAddr]
                                                          + tempAmount;
             userRIMAssetsLendingNetAmount[user][tokenAddr] = tempAmount;
