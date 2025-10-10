@@ -181,7 +181,7 @@ contract lendingManager is ReentrancyGuard {
     }
     
     // Allow users to approve/revoke a whitelisted interface to act on their behalf
-    function setInterfaceApproval(bool approved) external onlySetter{
+    function setInterfaceApproval(bool approved) external {
         uint lengthTemp = interfaceArray.length;
         for(uint i = 0; i != lengthTemp; i++){
             interfaceApproval[msg.sender][interfaceArray[i]] = approved;
