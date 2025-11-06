@@ -652,7 +652,7 @@ contract lstInterface is ReentrancyGuard{
     // function unstake(uint256 _lsdTokenAmount) external;
     // function getRate() external view returns (uint256);
     // }
-    function gimoStake(string calldata _memo) public payable{
+    function gimoStake() public payable{
         iLstGimo(lstGimo).stake{value: msg.value}("zerrow");
     }
     function gimoUnstake(uint256 _lsdTokenAmount) public{

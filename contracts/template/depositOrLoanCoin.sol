@@ -16,6 +16,8 @@ contract depositOrLoanCoin is ERC20NoTransfer {
     
     uint public depositOrLoan;
     uint public OQCtotalSupply; //OriginalQuantityCoin
+
+    bool public mintlock;//0g added switch
     
     mapping(address=>uint) public userOQCAmount;
 
@@ -30,6 +32,7 @@ contract depositOrLoanCoin is ERC20NoTransfer {
         manager = _manager;
         depositOrLoan = _depositOrLoan;
         rewardContract = _rewardContract;
+        mintlock == false;
     }
 
     //----------------------------modifier ----------------------------
@@ -48,6 +51,10 @@ contract depositOrLoanCoin is ERC20NoTransfer {
         require(msg.sender == setter, 'Deposit Or Loan Coin: Only setter Use');
         _;
     }
+    modifier mintLocker() {
+        require(mintlock == false, 'Deposit Or Loan Coin: Mint function locked');
+        _;
+    }
 
     //----------------------------- event -----------------------------
     event Mint(address indexed token,address mintAddress, uint amount);
@@ -55,9 +62,9 @@ contract depositOrLoanCoin is ERC20NoTransfer {
     event RecordUpdate(bool ToF, address _userAccount,uint _value);
     //-------------------------- sys function --------------------------
 
-    // function managerSetup(address _manager) external onlySetter{
-    //     manager = _manager;
-    // }
+    function mintLockerSetup(bool tOF) external onlySetter{
+        mintlock = tOF;
+    }
     function rewardContractSetup(address _rewardContract) external onlySetter{
         rewardContract = _rewardContract;
     }
@@ -78,7 +85,7 @@ contract depositOrLoanCoin is ERC20NoTransfer {
     /**
      * @dev mint
      */
-    function mintCoin(address _account,uint256 _value) public onlyManager lock{
+    function mintCoin(address _account,uint256 _value) public onlyManager mintLocker lock{
         uint addTokens;
         require(_value > 0,"Deposit Or Loan Coin: Input value MUST > 0");
         require(_account != address(0),"Deposit Or Loan Coin: Cannot mint to zero address");

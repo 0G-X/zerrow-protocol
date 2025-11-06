@@ -26,16 +26,14 @@ contract lendingManager is ReentrancyGuard {
     address public coinFactory;
     address public lendingVault;
     address public coreAlgorithm;
-    // address public lendingInterface;
 
     address public setter;
     address newsetter;
-    // address public rebalancer;
 
     uint    public normalFloorOfHealthFactor;
     uint    public homogeneousFloorOfHealthFactor;
 
-    address public badDebtCollectionAddress;
+    // address public badDebtCollectionAddress;
     address public flashLoanFeesAddress;
 
     //  Assets Init:          USDT  USDC  BTC   ETH   0g
@@ -73,7 +71,6 @@ contract lendingManager is ReentrancyGuard {
     address[] public interfaceArray;
     mapping(address => mapping(address => bool)) public interfaceApproval;
     
-
     mapping(address => licensedAsset) public licensedAssets;
     mapping(address => address[2]) public assetsDepositAndLend;
     address[] public assetsSerialNumber;
@@ -132,9 +129,9 @@ contract lendingManager is ReentrancyGuard {
         homogeneousFloorOfHealthFactor = 1.03 ether;
     }
 
-    function setBadDebtCollectionAddress(address _badDebtCollectionAddress) external onlySetter{
-        badDebtCollectionAddress = _badDebtCollectionAddress;
-    }
+    // function setBadDebtCollectionAddress(address _badDebtCollectionAddress) external onlySetter{
+    //     badDebtCollectionAddress = _badDebtCollectionAddress;
+    // }
     function setFlashLoanFeesAddress(address _flashLoanFeesAddress) external onlySetter{
         flashLoanFeesAddress = _flashLoanFeesAddress;
     }
@@ -478,12 +475,17 @@ contract lendingManager is ReentrancyGuard {
     // Withdrawal of deposits
     function withdrawDeposit(address tokenAddr, uint amount, address user) public onlyInterface(user) {
         uint amountNormalize = amount * 1 ether / (10**iDecimals(tokenAddr).decimals());
+        uint amountTokenMax = iDepositOrLoanCoin(assetsDepositAndLend[tokenAddr][0]).balanceOf(user);
 
         require(amount > 0,"Lending Manager: Cant Pledge 0 amount");
         require(licensedAssets[tokenAddr].assetAddr == tokenAddr,"Lending Manager: Token not licensed");
-        require(VaultTokensAmount(tokenAddr) >= amountNormalize,"Lending Manager: Vault Tokens amount NOT enough");
+        require(VaultTokensAmount(tokenAddr) >= amountNormalize,"Lending Manager: Vault Token amount NOT enough");
+        require(amountTokenMax >= amountNormalize,"Lending Manager: User Token amount NOT enough");
         // There is no need to check the mode
-
+        if(amountTokenMax - amountNormalize < 1 ether / (10**iDecimals(tokenAddr).decimals())) {
+            amountNormalize = amountTokenMax;
+        }
+        
         iLendingVaults(lendingVault).vaultsERC20Approve(tokenAddr, amount);
         _beforeUpdate(tokenAddr);
         IERC20(tokenAddr).safeTransferFrom(lendingVault,user,amount);
@@ -543,9 +545,14 @@ contract lendingManager is ReentrancyGuard {
     // repay Loan
     function repayLoan(address tokenAddr,uint amount, address user) public onlyInterface(user) {
         uint amountNormalize = amount * 1 ether / (10**iDecimals(tokenAddr).decimals());
+        uint amountTokenMax = iDepositOrLoanCoin(assetsDepositAndLend[tokenAddr][1]).balanceOf(user);
 
         require(amount > 0,"Lending Manager: Cant Pledge 0 amount");
         require(licensedAssets[tokenAddr].assetAddr == tokenAddr,"Lending Manager: Token not licensed");
+        if(amountNormalize > amountTokenMax){
+            require(amountNormalize - amountTokenMax < 1 ether / (10**iDecimals(tokenAddr).decimals()));
+            amountNormalize = amountTokenMax;
+        }
 
         if(userMode[user] == 1){
             require(licensedAssets[userRIMAssetsAddress[user]].maxLendingAmountInRIM > 0,"Lending Manager: Wrong Token in Risk Isolation Mode");
@@ -557,6 +564,7 @@ contract lendingManager is ReentrancyGuard {
             userRIMAssetsLendingNetAmount[user][tokenAddr] = tempAmount;
         }
         _beforeUpdate(tokenAddr);
+        
         iDepositOrLoanCoin(assetsDepositAndLend[tokenAddr][1]).burnCoin(user,amountNormalize);
         IERC20(tokenAddr).safeTransferFrom(msg.sender,lendingVault,amount);
         _assetsValueUpdate(tokenAddr);
@@ -596,38 +604,30 @@ contract lendingManager is ReentrancyGuard {
         }
     }
     //------------------------------------------------------------------------------
-    function badDebtDeduction(address user) public nonReentrant {
-        require(_userTotalDepositValue(user) <= _userTotalLendingValue(user)*102/100,"Lending Manager: should be bad debt.");
-        uint len = assetsSerialNumber.length;
-        uint[] memory depositBalances = new uint[](len);
-        uint[] memory lendingBalances = new uint[](len);
-        // Cache all balances first
-        for (uint i = 0; i != len; i++) {
-            depositBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][0]).balanceOf(user);
-            lendingBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][1]).balanceOf(user);
-        }
-        // Process all mints first
-        for (uint i = 0; i != len; i++) {
-            if (depositBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).mintCoin(badDebtCollectionAddress, depositBalances[i]);
-            }
-            if (lendingBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).mintCoin(badDebtCollectionAddress, lendingBalances[i]);
-            }
+    // function badDebtDeduction(address user) public nonReentrant {
+    //     require(_userTotalDepositValue(user) <= _userTotalLendingValue(user)*102/100,"Lending Manager: should be bad debt.");
+    //     uint len = assetsSerialNumber.length;
+    //     uint[] memory depositBalances = new uint[](len);
+    //     uint[] memory lendingBalances = new uint[](len);
+    //     // Cache all balances first
+    //     for (uint i = 0; i != len; i++) {
+    //         depositBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][0]).balanceOf(user);
+    //         lendingBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][1]).balanceOf(user);
+    //     }
+    //     // Process all mints first, process all burns after mints
+    //     for (uint i = 0; i != len; i++) {
+    //         if (depositBalances[i] > 0) {
+    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).mintCoin(badDebtCollectionAddress, depositBalances[i]);
+    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).burnCoin(user, depositBalances[i]);
+    //         }
+    //         if (lendingBalances[i] > 0) {
+    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).mintCoin(badDebtCollectionAddress, lendingBalances[i]);
+    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).burnCoin(user, lendingBalances[i]);
+    //         }
 
-        }
-        // Process all burns after mints
-        for (uint i = 0; i != len; i++) {
-            if (depositBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).burnCoin(user, depositBalances[i]);
-            }
-            if (lendingBalances[i] > 0) {
-                iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).burnCoin(user, lendingBalances[i]);
-            }
-        }
-
-        emit BadDebtDeduction(user,block.timestamp);
-    }
+    //     }
+    //     emit BadDebtDeduction(user,block.timestamp);
+    // }
 
     //------------------------------ Liquidate Function------------------------------
     // token Liquidate

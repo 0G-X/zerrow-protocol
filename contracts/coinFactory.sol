@@ -62,12 +62,16 @@ contract coinFactory  {
         rewardContract = _rewardContract;
     }
 
-    function coinResetup(address coinAddr,address _rewardContract) external{
+    function coinResetup(address coinAddr,address _rewardContract) external {
         require(msg.sender == setPermissionAddress, 'Coin Factory: Permission FORBIDDEN');
         // depositOrLoanCoin(coinAddr).managerSetup(_manager);
         depositOrLoanCoin(coinAddr).rewardContractSetup(_rewardContract);
     }
-    function rewardTypeSetup(uint _depositType,uint _loanType) external{
+    function coinMintLockerSetup(address coinAddr, bool tOF) external {
+        require(msg.sender == setPermissionAddress, 'Coin Factory: Permission FORBIDDEN');
+        depositOrLoanCoin(coinAddr).mintLockerSetup(tOF);
+    }
+    function rewardTypeSetup(uint _depositType,uint _loanType) external {
         require(msg.sender == setPermissionAddress, 'Coin Factory: Permission FORBIDDEN');
         require(_depositType * _loanType > 0, 'Coin Factory: Type Must > 0');
         require(_depositType != _loanType, 'Coin Factory: depositType and loanType Must NOT same');

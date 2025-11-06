@@ -9,6 +9,7 @@ import "./interfaces/iwA0GI.sol";
 import "./interfaces/islcoracle.sol";
 import "./interfaces/iDepositOrLoanCoin.sol";
 import "./interfaces/iLendingCoreAlgorithm.sol";
+import "./interfaces/iDecimals.sol";
 
 contract lendingInterface is ReentrancyGuard{
     address public lendingManager;
@@ -29,7 +30,6 @@ contract lendingInterface is ReentrancyGuard{
         oracleAddr = _oracleAddr;
         lCoreAddr = _lCoreAddr;
     }
-
     //------------------------------------------------ View ----------------------------------------------------
     function licensedAssets(
         address token
@@ -668,24 +668,25 @@ contract lendingInterface is ReentrancyGuard{
         }
 
     }
-    function withdrawDepositMax(address tokenAddr) external nonReentrant{
-        address[2] memory depositAndLend = assetsDepositAndLendAddrs(tokenAddr);
-        uint tokenBalance = IERC20(depositAndLend[0]).balanceOf(
-            address(msg.sender)
-        );
-        iLendingManager(lendingManager).withdrawDeposit(
-            tokenAddr,
-            tokenBalance,
-            msg.sender
-        );
-        if (IERC20(tokenAddr).balanceOf(address(this)) > 0) {
-            IERC20(tokenAddr).safeTransfer(
-                msg.sender,
-                IERC20(tokenAddr).balanceOf(address(this))
-            );
-        }
+    // function withdrawDepositMax(address tokenAddr) external nonReentrant{
+    //     address[2] memory depositAndLend = assetsDepositAndLendAddrs(tokenAddr);
+    //     uint tokenBalance = IERC20(depositAndLend[0]).balanceOf(
+    //         address(msg.sender)
+    //     );
+    //     tokenBalance = tokenBalance * (10**iDecimals(tokenAddr).decimals()) / 1 ether; // Un normalize
+    //     iLendingManager(lendingManager).withdrawDeposit(
+    //         tokenAddr,
+    //         tokenBalance,
+    //         msg.sender
+    //     );
+    //     if (IERC20(tokenAddr).balanceOf(address(this)) > 0) {
+    //         IERC20(tokenAddr).safeTransfer(
+    //             msg.sender,
+    //             IERC20(tokenAddr).balanceOf(address(this))
+    //         );
+    //     }
 
-    }
+    // }
     // lend Asset
     function lendAsset(address tokenAddr, uint amount) external nonReentrant{
         iLendingManager(lendingManager).lendAsset(
@@ -718,28 +719,33 @@ contract lendingInterface is ReentrancyGuard{
         }
 
     }
-    function repayLoanMax(address tokenAddr) external nonReentrant{
-        address[2] memory depositAndLend = assetsDepositAndLendAddrs(tokenAddr);
-        uint tokenBalance = IERC20(depositAndLend[1]).balanceOf(
-            address(msg.sender)
-        );
-        IERC20(tokenAddr).safeTransferFrom(
-            msg.sender,
-            address(this),
-            tokenBalance
-        );
-        IERC20(tokenAddr).approve(lendingManager, tokenBalance);
-        iLendingManager(lendingManager).repayLoan(
-            tokenAddr,
-            tokenBalance,
-            msg.sender
-        );
-        uint256 remainingBalance = IERC20(tokenAddr).balanceOf(address(this));
-        if (remainingBalance > 0) {
-            IERC20(tokenAddr).safeTransfer(msg.sender,remainingBalance);
-        }
+    // function repayLoanMax(address tokenAddr) external nonReentrant{
+    //     address[2] memory depositAndLend = assetsDepositAndLendAddrs(tokenAddr);
+    //     uint tokenBalance = IERC20(depositAndLend[1]).balanceOf(
+    //         address(msg.sender)
+    //     );
 
-    }
+    //     uint tokenBackAmount = tokenBalance * (10**iDecimals(tokenAddr).decimals()) / 1 ether; // Un normalize
+    //     if(tokenBalance > tokenBackAmount * 1 ether / (10**iDecimals(tokenAddr).decimals())) {
+    //         tokenBackAmount = tokenBackAmount + 1;
+    //     }
+    //     IERC20(tokenAddr).safeTransferFrom(
+    //         msg.sender,
+    //         address(this),
+    //         tokenBackAmount
+    //     );
+    //     IERC20(tokenAddr).approve(lendingManager, tokenBackAmount);
+    //     iLendingManager(lendingManager).repayLoan(
+    //         tokenAddr,
+    //         tokenBackAmount,
+    //         msg.sender
+    //     );
+    //     uint256 remainingBalance = IERC20(tokenAddr).balanceOf(address(this));
+    //     if (remainingBalance > 0) {
+    //         IERC20(tokenAddr).safeTransfer(msg.sender,remainingBalance);
+    //     }
+
+    // }
     //-----------------------------------------Operation 2 can use 0g---------------------------------------------
     //  Assets Deposit
     function assetsDeposit2(address tokenAddr, uint amount) external payable nonReentrant{
@@ -808,6 +814,7 @@ contract lendingInterface is ReentrancyGuard{
         uint tokenBalance = IERC20(depositAndLend[0]).balanceOf(
             address(msg.sender)
         );
+        tokenBalance = tokenBalance * (10**iDecimals(tokenAddr).decimals()) / 1 ether; // Un normalize
         iLendingManager(lendingManager).withdrawDeposit(
             tokenAddr,
             tokenBalance,
@@ -894,24 +901,29 @@ contract lendingInterface is ReentrancyGuard{
         uint tokenBalance = IERC20(depositAndLend[1]).balanceOf(
             address(msg.sender)
         );
+        // tokenBalance = tokenBalance * (10**iDecimals(tokenAddr).decimals()) / 1 ether; // Un normalize
+        uint tokenBackAmount = tokenBalance * (10**iDecimals(tokenAddr).decimals()) / 1 ether; // Un normalize
+        if(tokenBalance > tokenBackAmount * 1 ether / (10**iDecimals(tokenAddr).decimals())) {
+            tokenBackAmount = tokenBackAmount + 1;
+        }
         if (tokenAddr == A0GI) {
             require(
-                tokenBalance <= msg.value,
+                tokenBackAmount <= msg.value,
                 "Lending Interface: amount should == msg.value"
             );
-            iwA0GI(A0GI).deposit{value: tokenBalance}();
+            iwA0GI(A0GI).deposit{value: tokenBackAmount}();
         } else {
             require(msg.value == 0, "Lending Interface: msg.value should == 0");
             IERC20(tokenAddr).safeTransferFrom(
                 msg.sender,
                 address(this),
-                tokenBalance
+                tokenBackAmount
             );
         }
-        IERC20(tokenAddr).approve(lendingManager, tokenBalance);
+        IERC20(tokenAddr).approve(lendingManager, tokenBackAmount);
         iLendingManager(lendingManager).repayLoan(
             tokenAddr,
-            tokenBalance,
+            tokenBackAmount,
             msg.sender
         );
         if (IERC20(A0GI).balanceOf(address(this)) > 0) {
