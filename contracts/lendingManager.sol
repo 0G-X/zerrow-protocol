@@ -33,7 +33,6 @@ contract lendingManager is ReentrancyGuard {
     uint    public normalFloorOfHealthFactor;
     uint    public homogeneousFloorOfHealthFactor;
 
-    // address public badDebtCollectionAddress;
     address public flashLoanFeesAddress;
 
     //  Assets Init:          USDT  USDC  BTC   ETH   0g
@@ -124,14 +123,10 @@ contract lendingManager is ReentrancyGuard {
 
     constructor() {
         setter = msg.sender;
-        // rebalancer = msg.sender;
         normalFloorOfHealthFactor = 1.2 ether;
         homogeneousFloorOfHealthFactor = 1.03 ether;
     }
 
-    // function setBadDebtCollectionAddress(address _badDebtCollectionAddress) external onlySetter{
-    //     badDebtCollectionAddress = _badDebtCollectionAddress;
-    // }
     function setFlashLoanFeesAddress(address _flashLoanFeesAddress) external onlySetter{
         flashLoanFeesAddress = _flashLoanFeesAddress;
     }
@@ -603,31 +598,6 @@ contract lendingManager is ReentrancyGuard {
             require( factor >= normalFloorOfHealthFactor,"Your Health Factor <= normal Floor Of Health Factor, Cant redeem assets");
         }
     }
-    //------------------------------------------------------------------------------
-    // function badDebtDeduction(address user) public nonReentrant {
-    //     require(_userTotalDepositValue(user) <= _userTotalLendingValue(user)*102/100,"Lending Manager: should be bad debt.");
-    //     uint len = assetsSerialNumber.length;
-    //     uint[] memory depositBalances = new uint[](len);
-    //     uint[] memory lendingBalances = new uint[](len);
-    //     // Cache all balances first
-    //     for (uint i = 0; i != len; i++) {
-    //         depositBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][0]).balanceOf(user);
-    //         lendingBalances[i] = IERC20(assetsDepositAndLend[assetsSerialNumber[i]][1]).balanceOf(user);
-    //     }
-    //     // Process all mints first, process all burns after mints
-    //     for (uint i = 0; i != len; i++) {
-    //         if (depositBalances[i] > 0) {
-    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).mintCoin(badDebtCollectionAddress, depositBalances[i]);
-    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][0]).burnCoin(user, depositBalances[i]);
-    //         }
-    //         if (lendingBalances[i] > 0) {
-    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).mintCoin(badDebtCollectionAddress, lendingBalances[i]);
-    //             iDepositOrLoanCoin(assetsDepositAndLend[assetsSerialNumber[i]][1]).burnCoin(user, lendingBalances[i]);
-    //         }
-
-    //     }
-    //     emit BadDebtDeduction(user,block.timestamp);
-    // }
 
     //------------------------------ Liquidate Function------------------------------
     // token Liquidate
@@ -665,36 +635,5 @@ contract lendingManager is ReentrancyGuard {
         emit AssetsDeposit(liquidateToken, liquidateAmount, user);
         emit RepayLoan(depositToken, usedAmount, user);
     }
-    
-    // function tokenLiquidateEstimate(address user,
-    //                         address liquidateToken,
-    //                         address depositToken) public view returns(uint[2] memory maxAmounts){
-    //     if(viewUsersHealthFactor(user) >= 1 ether){
-    //         uint[2] memory zero;
-    //         return zero;
-    //     }
-    //     uint amountliquidate = iDepositOrLoanCoin(assetsDepositAndLend[liquidateToken][0]).balanceOf(user);
-    //     uint amountDeposit = iDepositOrLoanCoin(assetsDepositAndLend[depositToken][1]).balanceOf(user);
-    //     uint liquidateTokenPrice = iSlcOracle(oracleAddr).getPrice(liquidateToken);
-    //     uint depositTokenPrice = iSlcOracle(oracleAddr).getPrice(depositToken);
 
-    //     uint liquidateMaxValue = amountliquidate * liquidateTokenPrice / 1 ether;//
-    //     uint depositMaxValue = amountDeposit * depositTokenPrice / 1 ether
-    //                   * UPPER_SYSTEM_LIMIT / (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty);//
-
-    //     if(liquidateMaxValue < depositMaxValue){
-    //         maxAmounts[0] = amountliquidate;
-    //         maxAmounts[1] = liquidateMaxValue * (UPPER_SYSTEM_LIMIT - licensedAssets[liquidateToken].liquidationPenalty) * 1 ether 
-    //                                         / (UPPER_SYSTEM_LIMIT * depositTokenPrice);
-    //     }else if(liquidateMaxValue == depositMaxValue){
-    //         maxAmounts[0] = amountliquidate;
-    //         maxAmounts[1] = amountDeposit;
-    //     }else{
-    //         maxAmounts[0] = depositMaxValue * 1 ether / liquidateTokenPrice;//At this point, this Token deposit of the liquidated user will be fully liquidated
-    //         maxAmounts[1] = amountDeposit;
-            
-    //     }
-    //     maxAmounts[0] = maxAmounts[0] * (10**iDecimals(liquidateToken).decimals()) / 1 ether;
-    //     maxAmounts[1] = maxAmounts[1] * (10**iDecimals(depositToken).decimals()) / 1 ether;
-    // }
 }

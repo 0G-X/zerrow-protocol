@@ -24,26 +24,26 @@ contract lendingVaults  {
     //----------------------------modifier ----------------------------
 
     modifier onlySetter() {
-        require(msg.sender == setter, 'Lending Manager: Only Setter Use');
+        require(msg.sender == setter, 'Lending Vault: Only Setter Use');
         _;
     }
     modifier onlyManager() {
-        require(msg.sender == lendingManager, 'Lending Manager: Only Setter Use');
+        require(msg.sender == lendingManager, 'Lending Vault: Only Setter Use');
         _;
     }
     modifier onlyRebalancer() {
-        require(msg.sender == rebalancer, 'Lending Manager: Only Rebalancer Use');
+        require(msg.sender == rebalancer, 'Lending Vault: Only Rebalancer Use');
         _;
     }
 
     //----------------------------        ----------------------------
     function transferSetter(address _set) external onlySetter{
-        require(_set != address(0),"Deposit Or Loan Coin: New setter cannot be zero address");
-        require(_set != setter,"Lending Manager: Cannot transfer to current setter");
+        require(_set != address(0),"Lending Vault: New setter cannot be zero address");
+        require(_set != setter,"Lending Vault: Cannot transfer to current setter");
         newsetter = _set;
     }
     function acceptSetter(bool _TorF) external {
-        require(msg.sender == newsetter, 'Lending Manager: Permission FORBIDDEN');
+        require(msg.sender == newsetter, 'Lending Vault: Permission FORBIDDEN');
         if(_TorF){
             setter = newsetter;
         }
@@ -66,7 +66,7 @@ contract lendingVaults  {
         uint balRaw = IERC20(token).balanceOf(address(this));
         uint balNorm18 = (balRaw * 1 ether) / (10 ** d);
 
-        require(balNorm18 > netNorm18,"Lending Manager: Cant Do Excess Disposal, asset not enough!");
+        require(balNorm18 > netNorm18,"Lending Vault: Cant Do Excess Disposal, asset not enough!");
         uint exNorm18 = balNorm18 - netNorm18;
         uint exRaw = (exNorm18 * (10 ** d)) / 1 ether;
         IERC20(token).safeTransfer(msg.sender, exRaw);
@@ -80,7 +80,7 @@ contract lendingVaults  {
         if(address(this).balance>0){
             address payable receiver = payable(_to); // Set receiver
             (bool success, ) = receiver.call{value:address(this).balance}("");
-            require(success,"Lending Interface: 0g Transfer Failed");
+            require(success,"Lending Vault: 0g Transfer Failed");
         }
     }
 
