@@ -10,6 +10,7 @@ import "./interfaces/islcoracle.sol";
 import "./interfaces/iDepositOrLoanCoin.sol";
 import "./interfaces/iLendingCoreAlgorithm.sol";
 import "./interfaces/iLstGimo.sol";
+import "./interfaces/iDecimals.sol";
 
 contract lstInterface is ReentrancyGuard{
     address public lendingManager;
@@ -644,7 +645,40 @@ contract lstInterface is ReentrancyGuard{
             totalBorrowed[i] = tempAmounts[1];
         }
     }
+    //-------------------------------token Liquidate Estimate-------------------------------------------
+    function tokenLiquidateEstimate(address user,
+                            address liquidateToken,
+                            address depositToken) public view returns(uint[2] memory maxAmounts){
+        if(viewUsersHealthFactor(user) >= 1 ether){
+            uint[2] memory zero;
+            return zero;
+        }
+        uint amountliquidate = iDepositOrLoanCoin(assetsDepositAndLendAddrs(liquidateToken)[0]).balanceOf(user);
+        uint amountDeposit = iDepositOrLoanCoin(assetsDepositAndLendAddrs(depositToken)[1]).balanceOf(user);
+        uint liquidateTokenPrice = iSlcOracle(oracleAddr).getPrice(liquidateToken);
+        uint depositTokenPrice = iSlcOracle(oracleAddr).getPrice(depositToken);
+        iLendingManager.licensedAsset memory liquidateTokenAttribute = licensedAssets(liquidateToken);
 
+        uint liquidateMaxValue = amountliquidate * liquidateTokenPrice / 1 ether;//
+        uint upperSystemLimit = UPPER_SYSTEM_LIMIT();
+        uint depositMaxValue = amountDeposit * depositTokenPrice / 1 ether
+                      * upperSystemLimit / (upperSystemLimit - liquidateTokenAttribute.liquidationPenalty);//
+
+        if(liquidateMaxValue < depositMaxValue){
+            maxAmounts[0] = amountliquidate;
+            maxAmounts[1] = liquidateMaxValue * (upperSystemLimit - liquidateTokenAttribute.liquidationPenalty) * 1 ether 
+                                            / (upperSystemLimit * depositTokenPrice);
+        }else if(liquidateMaxValue == depositMaxValue){
+            maxAmounts[0] = amountliquidate;
+            maxAmounts[1] = amountDeposit;
+        }else{
+            maxAmounts[0] = depositMaxValue * 1 ether / liquidateTokenPrice;//At this point, this Token deposit of the liquidated user will be fully liquidated
+            maxAmounts[1] = amountDeposit;
+            
+        }
+        maxAmounts[0] = maxAmounts[0] * (10**iDecimals(liquidateToken).decimals()) / 1 ether;
+        maxAmounts[1] = maxAmounts[1] * (10**iDecimals(depositToken).decimals()) / 1 ether;
+    }
 
     //=======================================stake for Gimo=============================================
     // interface iLstGimo{

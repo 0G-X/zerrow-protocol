@@ -32,11 +32,11 @@ contract coinFactory  {
         require(lendingManager != address(0), 'Coin Factory: Coin manager NOT Set');
         require(rewardContract != address(0), 'Coin Factory: Reward Contract NOT Set');
         require(depositType != 0, 'Coin Factory: Reward Type NOT Set');
-        bytes32 _salt1 = keccak256(abi.encodePacked(token,msg.sender, "Deposit Coin"));
-        bytes32 _salt2 = keccak256(abi.encodePacked(token,msg.sender, "Loan Coin"));
+        bytes32 _salt1 = keccak256(abi.encodePacked(token,msg.sender, "Zerrow Deposit Coin V1"));
+        bytes32 _salt2 = keccak256(abi.encodePacked(token,msg.sender, "Zerrow Loan Coin V1"));
         // Only ERC20 Tokens Can create pairs
-        _pAndLCoin[0] = address(new depositOrLoanCoin{salt: _salt1}(0,token,lendingManager, rewardContract, strConcat(string(ERC20(token).symbol()), " Deposit Coin"),strConcat(string(ERC20(token).symbol()), " DCoin")));  //
-        _pAndLCoin[1] = address(new depositOrLoanCoin{salt: _salt2}(1,token,lendingManager, rewardContract,strConcat(string(ERC20(token).symbol()), " Loan Coin"),strConcat(string(ERC20(token).symbol()), " LCoin"))); 
+        _pAndLCoin[0] = address(new depositOrLoanCoin{salt: _salt1}(0,token,lendingManager, rewardContract, strConcat(string(ERC20(token).symbol()), " Zerrow Deposit Coin V1"),strConcat(string(ERC20(token).symbol()), " ZDCoin V1")));  //
+        _pAndLCoin[1] = address(new depositOrLoanCoin{salt: _salt2}(1,token,lendingManager, rewardContract,strConcat(string(ERC20(token).symbol()), " Zerrow Loan Coin V1"),strConcat(string(ERC20(token).symbol()), " ZLCoin V1"))); 
         getDepositCoin[token] = _pAndLCoin[0];
         getLoanCoin[token] = _pAndLCoin[1];
         iRewardMini(rewardContract).factoryUsedRegister(_pAndLCoin[0], depositType);
